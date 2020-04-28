@@ -1,0 +1,189 @@
+Following Udemy OS course by Vignesh Sekar.
+Adding Notes here + some of my own thoughts.
+
+=Overview=
+
+Operating Systems act as resource managers, where resources can be anything like CPU time, memory,
+etc. They contain various algorithms for resource management like scheduling of processes, etc.
+
+OS gets loaded into RAM at boot time, and remains active till the system is active. OS space or
+kernel space is the term used for the region in memory occupied by the OS. The remaining part is
+called user space.
+
+Program is the term used for the executables present on the hard disk. When launching the program,
+a process is created like a copy in the hard disk; there could be multiple instances of the program
+launched as separate processes. This could be loaded later into RAM for execution.
+A process can be various states like new, ready, running, I/O, etc.
+
+Every process has a PCB and some attributes associated with it. This is collectively also called as
+context of the process.
+
+Process Control Block or PCB is some memory space created for a process. It consists of Function
+Call Stack (including stack variables), a heap for dynamic allocations, space for static and global
+variables, and the actual program code. The Program Code is called Code Segment and rest is Data
+segment.
+
+Process Attributes like Process ID, Program Counter value, various register values, etc., help in
+process save-restore.
+
+=Scheduling Algorithms=
+
+Can be pre-emptive (utilizing save restore) or non pre-emptive (letting processes run to complete).
+Scheduling Algorithms are only applied for processes in ready state.
+
+If the expected time taken, arrival time info. is available then we can design some algorithm that
+could minimize average waiting time, turnaround time, total schedule length, etc.
+Gantt charts can be used to find these times above.
+SJF (shortest job first) relies on expected time taken for a process to schedule.
+SRTF (shortest remaining time first) also relies on the same, a bit like modification of SJF.
+SRTF is premptive algorithm but SJF is non-premptive.
+HRRN (Highest Response Ratio Next) is a non-premptive algorithm, which is a modification of SJF.
+The response ratio is (Waiting Time + Running Time) / (Running Time). As a process waits for
+longer durations, its response ratio will rise and could become higher than others with lower
+running time. This can avoid the starvation problem where long running time processes can possibly
+wait indefinitely for being scheduled.
+
+Thought: In many real use cases the expected time taken information might not be available.
+
+FCFS doesn't suffer from starvation (where there is a chance of a process waiting indefinitely).
+
+Round Robin algorithm adds the concept of a "Time Quantum". Whenever a process takes the CPU for
+time units equal to "Time Quantum", and there is some other ready process; preemption occurs.
+All ready processes are kept in a FIFO queue, preempted process is added at the end of the queue.
+The first ready process at the head of the queue is picked next for scheduling.
+
+Higher time quantum can reduce context switches, but can cause larger waits for waiting processes.
+
+FCFS and RR don't need the expected time taken information. RR avoids the "convoy effect" problem
+present in FCFS where large time consuming process can block short time consuming process for a
+long time.
+
+Priority scheduling adds an additional priority to process attributes. These can be preemptive as
+well.
+
+A process state diagram can be created to see the state transition of a process, at various events.
+Process can be sent to suspend state from ready state, when it is moved from RAM to hard disk; if
+there is no more room in RAM for a new process but a high priority process comes in. Later it can
+come back to ready space when RAM is available.
+
+After scheduler decides what process to schedule next, it calls the dispatcher which loads the
+various registers with process attributes to execute further.
+
+=Memory Allocation Techniques=
+
+Actual RAM addresses are physical address, these addresses lie in what we call as physical address
+space.
+A process also has addresses for various things like functions, etc., these are in a logical
+(or virtual) address space.
+
+==Contiguous Allocation==
+
+Contiguous allocation is if the addresses of the process is placed in a contiguous region of RAM
+physical addresses. The RAM can be made to use fixed/variable partitioning. In fixed partitioning,
+before a process is loaded, the RAM is split into some paritions. Processes are placed into one
+suitable partition when being loaded to RAM. A parition can't hold more than 1 process. In variable
+paritioning, the RAM is not split into any partitions beforehand. When process is loaded, it gets
+a new parition which has the required amount of memory that it needs.
+There is an internal fragmentation problem in fixed partitioning, where there could be extra size
+in the partition for a process that it doesn't need, but it got because the partition was created
+beforehand. There is an external fragmentation problem in variable partitioning, where based on
+how processes came and went earlier, there might be enough space available to accomodate a new
+process but it is not contiguous and thus the new process can't be allocated in RAM.
+
+Compaction and Paging are used to avoid fragmentation problems. Compaction causes the allocated
+regions to be made contiguous, at regular intervals; so that the free space also becomes
+contiguous. But compaction is a time consuming operation, and the CPU is running compaction code
+instead of running actual user processes.
+
+To convert logical address to physical address in contiguous allocation, CPU can simply keep a
+value in the base register which corresponds to the base address for the process, and just add
+this value to the logical address to get the physical address. This means the translation is
+just an addition. Additionally a table will need to be kept in RAM for process id to process base
+address information.
+
+==Non Contiguous Allocation==
+
+Paging is used for non-contiguous allocations and can solve the fragmentation problems observed
+with earlier methods described above. However, translation from logical to physical address is a
+relatively complex.
+
+RAM is divided into fixed size frames. Process memory is also divided into similar sized chunks
+called as pages. The frame size is kept same as page size, this becomes the allocation granularity,
+of which small contiguous chunks of memory can be allocated. Pages can be placed into frames that
+can be in any order. A Page Table is kept for every process, which has many as entries as the number
+of pages in the process. The entry for a particular page contains the frame number where it has been
+allocated in RAM. CPU needs to look up the page table of the process to find the physical address
+for a logical address.
+
+The logical address can be divided into two parts - page number (MSBs indicating the page) and page
+offset (LSBs indicating the offset within that page). To find the physical address, simply the page
+table for the process needs to be traversed, and the frame number for that page number can be
+found. Replacing the page number with the frame number, gives the physical address for the logical
+address.
+
+Internal fragmentation is possible in paging, but the effect is much smaller as page size is small
+compared to the size of a partition in contiguous allocation with fixed partitioning.
+
+Page table entry size is number of bits required to repesent a frame, i.e. the number of bits for
+the frame number. Number of page table entries is total number of pages in the process. Total page
+table size is the product of the two.
+
+===Multilevel Paging===
+
+Page tables can become very large with single level paging, e.g. with 4KB page size and 32-bit
+logical addresses, there are 2^(32-12) = 2^20 pages possible in the process, This is a huge number
+of page table entries for a process. We typically want to fit a page table in a RAM frame itself.
+This enables directly indexing into the page table, which is not possible if page table uses more
+than 1 frame.
+
+Multiple level of page tables help solve the problem above by creating more levels that can point
+to lower level page tables, so that each of the page tables can fit within a RAM frame. Higher
+level page table is looked into first, there indexing using some bits in page number provide the
+frame number where next level of page table is present. After reaching the frame for the next
+level, we can use the next few bits in page number to find the frame number where the next level
+after that is present. At the lowest level, we simply get the frame number of the RAM page which
+is used to find the physical address for the page.
+
+An example below:
+* With page size = 4KB, number of bits needed for page offset is 12.
+* Assume that the RAM size is 4GB.
+** Number of frames in RAM will be (4GB/4KB = ) 1M.
+** 20 bits are needed for frame number that will be stored in the page table entry (PTE).
+** If we can keep only multiples of bytes then, each PTE will take 3 bytes.
+* With 4KB page size, each Page Table that fits in RAM can have 4KB/3 = nearly 1365 entries.
+** Restricting to a power of 2, we will further limit this to 1024 or 2^10 entries.
+** So 10 bits will be needed for the lowest (first) level of Page Table.
+* For a process with 32-bit logical addresses, 20 bits will be used for the page number.
+** First (lowest) level will use the 10 LSBs of the page number.
+** Second (next) level will use the next 10 bits.
+*** This covers the entire 20 bits, so 2 levels are sufficient.
+** The address translation will first check using 10 MSBs of page number in the second level table.
+*** There will be only one second level table with 2^10 entries.
+*** Using this we find the frame number where the first level page table for the address is stored.
+** In the first level table, we search using the next 10 bits (LSBs here) of the page number.
+*** This gives the frame number where actual data is stored.
+*** We can replace the page number by this frame number, and get the physical address in RAM.
+*** There are 2^10 page tables in the first level.
+** All page tables together take (1 + 2^10) * 4KB = nearly 4MB space for the process.
+*** This is larger than 1MB * 3 space that a single page table would have taken.
+*** But each can fit in 1 page, so indexing is possible in each of them.
+** There are 3 memory accesses required for each actual accesses here.
+** Space taken by page tables can be optimized by keeping some second level table entries as NULL.
+*** This will be for the address regions that aren't allocated yet.
+* For a process with 64-bit logical addresses, 52 bits will be used for the page number.
+** First level has 10 bits, same for 2nd, 3rd, 4th and 5th levels, and 2 MSBs for 6th.
+** 7 memory accesses are required for each actual access.
+** Space taken by page tables is (1 + 2^2 + 4 * 2^10) * 4KB = nearly 16MB space for a process.
+*** Single page table would have required 2^52 entries, which needs 3 * 4096 TB !
+** Here too space taken by page tables can be optimized by keeping some level table entries as NULL.
+
+It is also possible for the OS or kernel driver to try to minimize the memory accesses required to
+access a page by choosing fewer page table levels, and artifically limiting the logical address
+space of a process.
+
+Page Table Entries can have additional bits other than the frame number.
+These could be:
+# Access Protection Bits (Read Write, Read Only, No Access).
+# Present/Absent Bit, whether the corresponding page is currently present on RAM or not.
+# Referenced Bits, used in page replacement, i.e. whether page was referred recently or not.
+# Dirty Bits, used when swapping page out to hard disk, for whether the page needs to be written.
