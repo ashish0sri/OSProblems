@@ -1,7 +1,7 @@
 Following Udemy OS course by Vignesh Sekar.
 Adding Notes here + some of my own thoughts.
 
-=Overview=
+== Overview
 
 Operating Systems act as resource managers, where resources can be anything like CPU time, memory,
 etc. They contain various algorithms for resource management like scheduling of processes, etc.
@@ -26,7 +26,7 @@ segment.
 Process Attributes like Process ID, Program Counter value, various register values, etc., help in
 process save-restore.
 
-=Scheduling Algorithms=
+== Scheduling Algorithms
 
 Can be pre-emptive (utilizing save restore) or non pre-emptive (letting processes run to complete).
 Scheduling Algorithms are only applied for processes in ready state.
@@ -69,14 +69,14 @@ come back to ready space when RAM is available.
 After scheduler decides what process to schedule next, it calls the dispatcher which loads the
 various registers with process attributes to execute further.
 
-=Memory Allocation Techniques=
+== Memory Allocation Techniques
 
 Actual RAM addresses are physical address, these addresses lie in what we call as physical address
 space.
 A process also has addresses for various things like functions, etc., these are in a logical
 (or virtual) address space.
 
-==Contiguous Allocation==
+=== Contiguous Allocation
 
 Contiguous allocation is if the addresses of the process is placed in a contiguous region of RAM
 physical addresses. The RAM can be made to use fixed/variable partitioning. In fixed partitioning,
@@ -101,7 +101,7 @@ this value to the logical address to get the physical address. This means the tr
 just an addition. Additionally a table will need to be kept in RAM for process id to process base
 address information.
 
-==Non Contiguous Allocation==
+=== Non Contiguous Allocation
 
 Paging is used for non-contiguous allocations and can solve the fragmentation problems observed
 with earlier methods described above. However, translation from logical to physical address is a
@@ -128,7 +128,7 @@ Page table entry size is number of bits required to repesent a frame, i.e. the n
 the frame number. Number of page table entries is total number of pages in the process. Total page
 table size is the product of the two.
 
-===Multilevel Paging===
+==== Multilevel Paging
 
 Page tables can become very large with single level paging, e.g. with 4KB page size and 32-bit
 logical addresses, there are 2^(32-12) = 2^20 pages possible in the process, This is a huge number
@@ -145,6 +145,7 @@ after that is present. At the lowest level, we simply get the frame number of th
 is used to find the physical address for the page.
 
 An example below:
+
 * With page size = 4KB, number of bits needed for page offset is 12.
 * Assume that the RAM size is 4GB.
 ** Number of frames in RAM will be (4GB/4KB = ) 1M.
@@ -183,6 +184,7 @@ space of a process.
 
 Page Table Entries can have additional bits other than the frame number.
 These could be:
+
 # Access Protection Bits (Read Write, Read Only, No Access).
 # Present/Absent Bit, whether the corresponding page is currently present on RAM or not.
 # Referenced Bits, used in page replacement, i.e. whether page was referred recently or not.
