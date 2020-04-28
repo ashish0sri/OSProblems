@@ -185,7 +185,7 @@ space of a process.
 Page Table Entries can have additional bits other than the frame number.
 These could be:
 
-# Access Protection Bits (Read Write, Read Only, No Access).
-# Present/Absent Bit, whether the corresponding page is currently present on RAM or not.
-# Referenced Bits, used in page replacement, i.e. whether page was referred recently or not.
-# Dirty Bits, used when swapping page out to hard disk, for whether the page needs to be written.
+. Access Protection Bits (Read Write, Read Only, No Access).
+. Present/Absent Bit, whether the corresponding page is currently present on RAM or not.
+. Referenced Bits, used in page replacement, i.e. whether page was referred recently or not.
+. Dirty Bits, used when swapping page out to hard disk, for whether the page needs to be written.
