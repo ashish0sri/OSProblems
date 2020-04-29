@@ -190,3 +190,69 @@ These could be:
 . Present/Absent Bit, whether the corresponding page is currently present on RAM or not.
 . Referenced Bits, used in page replacement, i.e. whether page was referred recently or not.
 . Dirty Bits, used when swapping page out to hard disk, for whether the page needs to be written.
+
+== Virtual Memory
+
+A Principle of Locality, says that at anytime a process will only require few pages and these set of
+pages will change overtime. So we need not keeps all pages of a process in the RAM everytime. These
+could just be kept present in hard disk only.
+
+Such a memory system where only few pages need to be maintained in RAM, is called as virtual memory.
+The set of addresses of the process which are inside the RAM are called as (Resident) virtual
+address space.
+
+This increases degree of multiprogramming, and allows running of processes that need memory even
+more than the physically available memory in RAM.
+
+=== Page Fault
+
+Page fault occurs when the logical address of the process doesn't have a page in the RAM. When the
+page fault is handled a relevant page for that address in hard disk is brought into the RAM, and
+the access that caused the page fault is replayed. The present/absent bit in page table entry can
+give the info whether the access is hit in RAM or a fault happens.
+
+Average Memory Access Time is the average time taken access a byte in the memory. In a single level
+page table system, 2 RAM access are always needed; one for access in page table and another for
+actual access (which could be after a fault). If x is the ratio of page faults then additionally x *
+Hard Disk Access Time is also needed. So the AMAT can be calulated as 2 * RAM Access Time + x * Hard
+Disk Access Time. An example, if RAM access time is 5ns, Hard Disk Access Time is 500ns and x is 0.1
+then AMAT will be 2 * 5 + 0.1 * 500 = 60ns.
+
+== TLB
+
+TLB stands for Translation Look-Aside Buffer. There is additional overhead of accessing page tables
+when accessing memory, as one extra memory access is required per page table level. We can maintain
+a few pages (or lines) of our page table in some cache to avoid this overhead and reduce the AMAT.
+The buffer where this is maintained is called as TLB. Here we can directly keep frame number for a
+logical address of the process. The TLB access time is even less than RAM access time as it is in
+some cache.
+
+== Frame Allocation
+
+Frames are allocated in RAM for some number of pages of a process. The pages of the process go to
+RAM go into those frames. When a new page needs to go to a RAM frame and all frames for that process
+are full, some page replacement algorithm is used to select a page in RAM that needs to be replaced.
+If we allocate too few frames for a process, then it is likely that there are too many page faults,
+which leads to Thrashing, i.e. too much time being spent in page faults.
+
+There are two types of frame allocation methods. One is static where we either divide the frames in
+RAM equally amongst the processes, or divide the frames based on process size, or divide based on
+something else. Dynamic Methods, are other ones where based on requirements the number of frames for
+processes can be changed while they are still running.
+Note: A process with more pages overall doesn't necessarily need more frames in RAM. e.g. a process
+that needs to access more different pages in a short time will need more frames in RAM, but a
+process that mostly accesses the same pages in a short time doesn't need more frames in RAM.
+
+== Page Replacement Algorithms
+
+There are two types of page replacement, local and global. Local ones only replace the pages in RAM
+that belong to the same process. Global ones can replace the pages in RAM which might belong to some
+other process as well. Local replacement is generally preferred as it doesn't interfere with other
+processes.
+
+In Demand Paging, no page is loaded into RAM until CPU requests for a byte in that page. This causes
+a page fault for every page.
+
+Various page replacement algorithms are LRU (least recently used), FIFO (first in first out), MRU
+(most recently used) etc. If we have information of pages to be accessed in future (which is not the
+case practically in general), another algorithm called as Optimal can be used.
