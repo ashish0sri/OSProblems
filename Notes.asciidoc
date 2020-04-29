@@ -131,7 +131,7 @@ table size is the product of the two.
 ==== Multilevel Paging
 
 Page tables can become very large with single level paging, e.g. with 4KB page size and 32-bit
-logical addresses, there are 2^(32-12) = 2^20 pages possible in the process, This is a huge number
+logical addresses, there are 2^(32-12)^ = 2^20^ pages possible in the process, This is a huge number
 of page table entries for a process. We typically want to fit a page table in a RAM frame itself.
 This enables directly indexing into the page table, which is not possible if page table uses more
 than 1 frame.
@@ -152,20 +152,20 @@ An example below:
 ** 20 bits are needed for frame number that will be stored in the page table entry (PTE).
 ** If we can keep only multiples of bytes then, each PTE will take 3 bytes.
 * With 4KB page size, each Page Table that fits in RAM can have 4KB/3 = nearly 1365 entries.
-** Restricting to a power of 2, we will further limit this to 1024 or 2^10 entries.
+** Restricting to a power of 2, we will further limit this to 1024 or 2^10^ entries.
 ** So 10 bits will be needed for the lowest (first) level of Page Table.
 * For a process with 32-bit logical addresses, 20 bits will be used for the page number.
 ** First (lowest) level will use the 10 LSBs of the page number.
 ** Second (next) level will use the next 10 bits.
 *** This covers the entire 20 bits, so 2 levels are sufficient.
 ** The address translation will first check using 10 MSBs of page number in the second level table.
-*** There will be only one second level table with 2^10 entries.
+*** There will be only one second level table with 2^10^ entries.
 *** Using this we find the frame number where the first level page table for the address is stored.
 ** In the first level table, we search using the next 10 bits (LSBs here) of the page number.
 *** This gives the frame number where actual data is stored.
 *** We can replace the page number by this frame number, and get the physical address in RAM.
-*** There are 2^10 page tables in the first level.
-** All page tables together take (1 + 2^10) * 4KB = nearly 4MB space for the process.
+*** There are 2^10^ page tables in the first level.
+** All page tables together take (1 + 2^10^) * 4KB = nearly 4MB space for the process.
 *** This is larger than 1MB * 3 space that a single page table would have taken.
 *** But each can fit in 1 page, so indexing is possible in each of them.
 ** There are 3 memory accesses required for each actual accesses here.
@@ -174,7 +174,8 @@ An example below:
 * For a process with 64-bit logical addresses, 52 bits will be used for the page number.
 ** First level has 10 bits, same for 2nd, 3rd, 4th and 5th levels, and 2 MSBs for 6th.
 ** 7 memory accesses are required for each actual access.
-** Space taken by page tables is (1 + 2^2 + 4 * 2^10) * 4KB = nearly 16MB space for a process.
+** 4KB * (1 + 2^2^ * (1 + 2^10^ * (1 + 2^10^ * (1 + 2^10^ * (1 + 2^10^))))) is the space taken by
+the page tables = nearly 4.4 * 4096 TB !
 *** Single page table would have required 2^52 entries, which needs 3 * 4096 TB !
 ** Here too space taken by page tables can be optimized by keeping some level table entries as NULL.
 
