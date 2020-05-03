@@ -256,3 +256,170 @@ a page fault for every page.
 Various page replacement algorithms are LRU (least recently used), FIFO (first in first out), MRU
 (most recently used) etc. If we have information of pages to be accessed in future (which is not the
 case practically in general), another algorithm called as Optimal can be used.
+
+== Synchronization and Deadlocks
+
+=== Concept of Shared Memory
+
+For process address space protection from other processes, OS disallows (or doesn't provide a way
+to) a process from accessing another's PCB. But there are cases where two or more processes might
+need to share some memory. This region is called as "Shared Memory" which could be considered as
+being kept in a separate region from PCBs.
+
+=== Need for Synchronization
+
+High-level instructions get split up in assembly code, e.g. a simple increment gets split into
+LOAD_TO_REG, INCR_REG_VALUE, STORE_FROM_REG. Due to preemption all of these might not be done but
+some of them might be, before context switch to another process. If the other process accesses a
+memory shared with the one switched out, it can load a value in its register which might have been
+different if all the machine code instructions meant for the high level instruction got complete.
+This process can then perform its operation based on the value it loaded, and store the result in
+the same shared memory. Whenever the original process gets back to execution, it has already loaded
+a value before the store from the other process, and it performs its operation based on the older
+value. When it stores the result it calculated, it simply overwrites the effect of the operation
+done by the other process.
+
+=== Critical Section
+
+Critical section is the region of code in a process where the accesses impact the contents of the
+region of memory shared with other processes. The code performing "increment" in the example above
+is a an example of a Critical Section.
+
+"Race Condition" is said to happen when the order of execution of instructions of two processes
+determines the outcome of value of some shared memory. In the example above, if similar "increment"
+code for two processes have their assembly level instructions overlapped with each other, we can
+see that an incorrect value (effect of only 1 increment). However, if there is no overlap, i.e. all
+assembly level instructions of one process complete before the other process instructions begin, we
+will see the correct value. Here the order of execution is determining whether we see correct or
+incorrect value at the end of the "increment" code for both processes, hence there is a race
+condition.
+
+It can be seen that Critical Sections in two different processes that impact same shared memory,
+being executed by the two process simultaneously; can cause race conditions. We can avoid race
+condtions simply by not letting any two processes be in the Critical Sections that impact same
+shared memory.
+
+=== Synchronization Mechanisms
+
+To avoid having processes enter CS at same time, we add an "Entry Section" before and an "Exit
+Section" after the CS in all processes. Entry section checks if it is safe to enter CS, i.e. no
+other process is already in it. Exit section releases the sole control of CS so that another process
+can acquire it.
+
+There are various synchronization mechanisms and we see if they satisfy some conditions. Three major
+ones are "Mutual Exclusion", "Progress", "Bounded Waiting". Mutual Exclusion is said to exist, if
+only one process can be in CS for some shared memory at one time. Progress exists if a process in a
+non-CS cannot block a process from entering a CS. Bounded Waiting exists, if once a process requests
+for entering a CS, there is an upper bound on number of times other processes are allowed to enter
+the CS for the same shared memory before its request is served.
+
+Mutual Exclusion is enough to guarantee no race conditions. Progress makes sure that a process is
+blocked from entering a CS only if some other process is in it. Bounded Waiting makes sure that a
+process waits a finite amount of time before it gets to access the CS.
+
+The more of these conditions are met by a synchronization mechanism, the better it is considered in
+general.
+
+==== Lock Variable
+
+* Lock Variable is a simple CS.
+* Its entry section is like { while (lock != 0);lock=1; } and exit section is like { lock = 0; }.
+* It doesn't satisfy mutual exclusion, as a preempt between while and lock=1 can still cause more
+that one process to enter the CS at the same time.
+** Thus, it can still cause race conditions, and is not considered as a good synchronization
+mechanism.
+* It doesn't satisfy Bounded Waiting condition.
+* It satisfies Progress condition.
+* Other features are it is Busy Waiting, Usermode implementable, needs no special H/W support.
+
+==== TSL
+
+* TSL stands for "Test and Set Lock" instruction.
+** This needs special H/W support for the new instruction.
+* Entry Section is { while(TSL(lock)); } and Exit Section is { lock = 0; }.
+** This sets the value in lock to 1 unconditionally but returns the older value of lock before it
+stored.
+** If the older value of lock read by a process is 0, it can carry on into the CS, otherwise it
+keeps waiting till it sees 0.
+* It satisfies Mutual Exclusion as TSL is one instructions in assembly level as well so can't be
+split up.
+* It doesn't satisfy Bounded Waiting condition.
+* It satisfies Progress condition.
+* Other features are it is Busy Waiting, Usermode implementable, Needs special H/W support.
+
+==== Strict Alternation
+
+* Strict Alternation Mechanism is a turn based mechanism that works for two processes only.
+* Here a process takes a lock only if it is its turn to take the lock and after releasing the lock
+it assigns the turn to another process.
+* One process has Entry Section as { while(turn == 0); } and Exit Section has { turn = 0; }.
+** This makes it wait for turn to become 1 and then enter CS and when exiting makes turn 0 to let
+another process enter.
+** The other process is waiting for turn to become 0 to enter CS and when exiting will make turn 1
+to let the original process enter again.
+* It doesn't satisfy progress condition as a process in non-CS can block another process from
+entering CS.
+** If the process in non-CS has its turn, it keeps the other process from taking the CS. The other
+process can continue only after the original process gets into CS and exits it.
+* Other features are it is Busy Waiting, Works for only 2 processes, Usermode implementable, Needs
+no special H/W support.
+
+==== Disable Interrupts
+
+* This simply disables scheduler interrupts that makes context switching not happen and doesn't let
+another process run till it renables interrupts.
+* Before entering CS interrupts are disabled, after exiting the interrupts are re-enabled.
+* Gives too much control to user, affects entire system as it stops other process from executing
+completely.
+** So this is considered a dangerous mechanism and generally not used anywhere.
+
+==== Peterson Method
+
+* This is a mechanism that works for two processes.
+* This uses a mix of turn-based and interested variable techniques.
+.Entry Section and Exit Section functions
+----
+void EntrySection(int process)
+{
+  int other = 1 - process;
+  Interested[process] = true;
+  LastTurnUpdater = process;
+
+  while (Interested(other) == true && LastTurnUpdater == process);
+}
+
+void ExitSection(int process)
+{
+  Interested[process] == false;
+}
+----
+* Here Interested[2] and LastTurnUpdater are global variables that both processes can access and
+are backed by same memory for both processes.
+* We can see that if the other process was found to be not interested then the condition in while
+is always false and the process can enter the CS.
+* Only if the other process is interested we need to resolve a conflict. The conflict is resolved
+by the LastTurnUpdater variable. If the current process is last to have set it, then it doesn't
+exit the while loop. But the other process can then exit the while loop and enter CS. After exiting
+the CS, it makes itself as not interested, which lets the original process exit the while loop.
+* Mutual Exclusion is guaranteed, as if 1 process enters the CS, the interested for it is definitely
+true. So the other will always see the first of while conditions as true. For the second condition:
+** If the original process saw Interested(other) as true then if LastTurnUpdater is original
+process, then it could not have entered the CS first due to the condition. But since we know that it
+has entered, LastTurnUpdater can only be the other process.
+*** Note: The process in CS cannot change the LastTurnUpdater, so only the other one can change it.
+** If original process saw Interested(other) as false and entered the CS with LastTurnUpdater as the
+original process. It is clear due to order of execution, LastTurnUpdater was original process first,
+then the check for Interested(other) showing as false means that the other process did not set it to
+true before original process set LastTurnUpdater. That means that the other process will set the
+LastTurnUpdater to the other process after the original process has already set LastTurnUpdater
+earlier. The original process is in CS so it can't modify it, so LastTurnUpdater at the check can
+still only be the other process.
+** This means if the original process is in CS, both conditions in while in Entry Section for other
+process is true, and the other process will not be able to exit the loop and enter the CS. This
+guarantees Mutual Exclusion.
+* Progress is also guaranteed as a process in non-CS can't block another from entering CS.
+* It satisfies Bounded Waiting as well, since a waiting process can be LastTurnUpdater only for as
+long as the process in CS exits the CS and sets LastTurnUpdater to itself. As soon as the waiting
+process is not the LastTurnUpdater, it will get a chance to enter the CS before the other one.
+* Other features are it is Busy Waiting, Works for only 2 processes, Usermode implementable, Needs
+no special H/W support.
