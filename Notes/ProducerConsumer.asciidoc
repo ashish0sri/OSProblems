@@ -1,0 +1,302 @@
+Some Notes on the Producer Consumer problem considering the synchronization issues, etc.
+
+== Producer Consumer Problem
+
+Let's say there is some data produced by a "Producer" process, which is consumed by a "Consumer"
+process. There can be some N slots that can each hold the produced data. The Producer can keep
+producing data till all the N slots are full; once they are all full it has to wait till the
+Consumer frees up at least one slot, otherwise it can overwrite some data before it is consumed by
+the Consumer. The Consumer can keep consuming data as long as there is at least one slot filled in.
+After consuming it can mark the slot as free, where more data can be written by the Producer.
+
+The N slots can be maintained in many ways. One such way could be a circular buffer where each slot
+has the address of some produced data. With this, we can additionally have two pointers in this
+buffer, one for ProducerNextWritePointer and another for ConsumerNextReadPointer. The producer will
+write the next produced data's address at ProducerNextWritePointer, and the consumer will read the
+next data's address at ConsumerNextReadPointer.
+
+=== Approach using flag to differentiate empty and full buffer
+
+With just two pointers, it is not possible to find a difference between circular buffer full and
+empty states, so we will also keep a flag fullFlag to indicate if the buffer is full.
+
+.As an example, consider the following locations of the two pointers at some point in time.
+----
+Circular Buffer Offset (assume 8 bytes for each slot, Buffer size = 0x58)
+0x00
+0x08
+0x10
+0x18
+0x20 ProducerNextWritePointer - 1 -> This is the last location the Consumer can Read.
+0x28 ProducerNextWritePointer -> This is the first location that Producer can Write.
+0x30
+0x38 ConsumerNextReadPointer - 1 -> This the last location that Producer can Write.
+0x40 ConsumerNextReadPointer -> This is first location that Consumer can Read.
+0x48
+0x50
+
+Note: Assume ConsumerNextReadPointer doesn't move and ProducerNextWritePointer becomes 0x40, then
+Producer needs to check that the two have become equal and set fullFlag to true.
+Also, after the consumer is done consuming it should always set fullFlag as false after incrementing
+ConsumerNextReadPointer.
+----
+
+The free space in the circular buffer is the region between ProducerNextWritePointer and
+(ConsumerNextReadPointer - 1) (both addresses included, and if needed including wrap-around).
+When ProducerNextWritePointer becomes equal to ConsumerNextReadPointer while writing into the
+buffer, the producer can no longer write into the buffer, as consumer hasn't yet read that location.
+So fullFlag needs to be set here. The relevant producer code will be something like:
+
+----
+if (fullFlag == true) {
+  waitForSomeSlotToFree();
+}
+
+produceDataAndInsertIntoCircularBufferAt(ProducerNextWritePointer);
+ProducerNextWritePointer += sizeof_oneSlot;
+
+if (ProducerNextWritePointer == ConsumerNextReadPointer) {
+  fullFlag = true;
+}
+----
+
+The space yet to be consumed in the circular buffer is the region between ConsumerNextReadPointer
+and (ProducerNextWritePointer - 1) (both addresses included, and if needed including wrap-around).
+When ProducerNextWritePointer becomes equal to ConsumerNextReadPointer after reading from the
+buffer, the consumer can no longer read from the buffer, as producer hasn't yet written that
+location. The fullFlag needs to be set to false after setting the ConsumerNextReadPointer at any
+time, as the producer might be blocked.
+The relevant consumer code will be something like:
+
+----
+if (fullFlag == false && ProducerNextWritePointer == ConsumerNextReadPointer) {
+  waitForSomeSlotToBeFilled();
+}
+
+consumeDataFromCircularBufferAt(ConsumerNextReadPointer);
+ConsumerNextReadPointer += sizeof_oneSlot;
+
+fullFlag = false;
+----
+
+Initially, both ProducerNextWritePointer and ConsumerNextReadPointer point to the start of the
+buffer and fullFlag is false. So that the consumer cannot consume and producer can produce the
+entire length of the buffer.
+
+==== Race Condition Issues
+
+The variables fullFlag, ProducerNextWritePointer and ConsumerNextReadPointer are shared by both the
+producer and consumer processes. Let's consider if there can be any race issues with any of these
+variables:
+
+* fullFlag: If a context switch happens before Producer sets it to true based on conditions and
+Consumer goes on to consume the entire buffer and sets it to false, and then another context switch
+happens; Producer will wrongly set it to true. This can make Consumer consume illegal data as it
+thinks the buffer is full, when it was actually empty. Also the Producer becomes blocked even though
+the buffer became empty.
+* ProducerNextWritePointer: This is updated only by the Producer, if this moves further ahead it
+only makes more region available to consume for the consumer. So if the consumer did not wait in its
+first condition and continued further execution, it will have continued even if it read a later
+updated value. If the consumer was blocked, it is waiting for this to be updated and will check
+later and will be able to continue based on the update by the Producer. So no race condition
+specific to this variable.
+* ConsumerNextReadPointer: Similar to the justification for ProducerNextWritePointer, we can say
+that no race condition will occur specific to this variable either.
+
+As we saw a race condition cause specific to fullFlag variable. We should fix that, one solution
+could be to add a new CS for full flag and have conditions or variables that decide the value of
+fullFlag put into the CS.
+
+* In producer code fullFlag is updated to true based on ProducerNextWritePointer and
+ConsumerNextReadPointer. ProducerNextWritePointer is set by same process so it can't change outside
+it. But the ConsumerNextReadPointer is set by Consumer process and if it is updated after the 2nd if
+check is done by Producer process, the Producer process can set a wrong value. Thus, the if block
+after the pointer update in Producer process needs to be in a CS.
+** Since we don't want Consumer to update fullFlag while Producer is in this CS, the Consumer
+fullFlag update needs to be in a CS as well. Also, the ConsumerNextReadPointer update in Consumer
+code needs to be in the same CS because:
+*** If there is a context switch between these two instructions such that after restore the fullFlag
+should no longer be set to false, then we will end up setting it wrongly (if these two instructions
+are not in the same CS).
+* The Consumer doesn't make decision on setting fullFlag based on the value of
+ProducerNextWritePointer. However, it decides on whether to wait or not based on the two pointers
+being equal. If there is a context switch after pointer update in Producer and before the next if
+check, fullFlag is definitely false. If the pointers become unequal the Consumer should continue
+and it can because clearly something new was written.
+** However, if the pointers become equal then the Consumer misses seeing fullFlag being set to true
+and it waits unnecessarily. So the Producer pointer update should also happen in the same CS where
+the if check happens.
+* The first check on whether to wait or not in both Producer and Consumer code need not be in a CS,
+as there are no value updates there, and either older or newer value of pointers and fullFlag is
+seen which can happen even in the presence of CS (order of getting into CS can be any). The pointer
+updates and fullFlag setting need to already be put in same CS due to earlier points.
+
+Considering the above points for the CS to be introduced.
+
+.The producer code will then be
+----
+if (fullFlag == true) {
+  waitForSomeSlotToFree();
+}
+
+produceDataAndInsertIntoCircularBufferAt(ProducerNextWritePointer);
+
+enterCriticalSectionFor(fullFlagUpdate);
+{
+  ProducerNextWritePointer += sizeof_oneSlot;
+
+  if (ProducerNextWritePointer == ConsumerNextReadPointer) {
+    fullFlag = true;
+  }
+}
+exitCriticalSectionFor(fullFlagUpdate);
+----
+
+.The consumer code will then be
+----
+if (fullFlag == false && ProducerNextWritePointer == ConsumerNextReadPointer) {
+  waitForSomeSlotToBeFilled();
+}
+
+consumeDataFromCircularBufferAt(ConsumerNextReadPointer);
+
+enterCriticalSectionFor(fullFlagUpdate);
+{
+  ConsumerNextReadPointer += sizeof_oneSlot;
+
+  fullFlag = false;
+}
+exitCriticalSectionFor(fullFlagUpdate);
+----
+
+=== Approach wasting a slot to differentiate between buffer full and empty
+
+There can also be an alternate implementation of circular buffer that doesn't use the fullFlag but
+wastes a slot when the buffer is full. The producer code will make progress only if there are at
+least two slots available to write, which will naturally waste a slot. But this makes the buffer
+full and empty conditions non-identical, which gets rid of the need for the fullFlag.
+
+The Buffer Empty condition is then (ProducerNextWritePointer == ConsumerNextReadPointer) and the
+buffer full condition is then (ProducerNextWritePointer + 1 == ConsumerNextReadPointer).
+
+.As an example, consider the following locations of the two pointers at some point in time.
+----
+Circular Buffer Offset (assume 8 bytes for each slot, Buffer size = 0x58)
+0x00
+0x08
+0x10
+0x18
+0x20 ProducerNextWritePointer - 1 -> This is the last location the Consumer can Read.
+0x28 ProducerNextWritePointer -> This is the first location that Producer can Write.
+0x30 ConsumerNextReadPointer - 2 -> This the last location that Producer can Write.
+0x38 WASTED SLOT to help differentiate between buffer empty and full.
+0x40 ConsumerNextReadPointer -> This is first location that Consumer can Read.
+0x48
+0x50
+
+Note: The Wasted Slot keeps moving and is simply the slot at (ConsumerNextReadPointer - 1)
+----
+
+The producer code with this approach will be something like:
+
+----
+if (ProducerNextWritePointer + 1 == ConsumerNextReadPointer) {
+  waitForSomeSlotToFree();
+}
+
+produceDataAndInsertIntoCircularBufferAt(ProducerNextWritePointer);
+ProducerNextWritePointer += sizeof_oneSlot;
+----
+
+The consumer code with this approach will be something like:
+
+----
+if (ProducerNextWritePointer == ConsumerNextReadPointer) {
+  waitForSomeSlotToBeFilled();
+}
+
+consumeDataFromCircularBufferAt(ConsumerNextReadPointer);
+ConsumerNextReadPointer += sizeof_oneSlot;
+----
+
+There is no variable that is written by both Producer and Consumer in this approach, and it is easy
+to see that there are no race conditions here that need to be taken care of.
+
+=== wait functions implementations
+
+One other thing to consider is the implementation of waitForSomeSlotToFree() and
+waitForSomeSlotToBeFilled().
+
+==== With Busy Waiting
+
+In a Busy Waiting solution we can simply replace the if block by a while with the same condition.
+For example, in Waste One Slot approach, waitForSomeSlotToFree() and the if block it is in can be
+replaced by simply:
+
+----
+while (ProducerNextWritePointer + 1 == ConsumerNextReadPointer);
+----
+
+So with busy waiting the producer and consumer code will be something like:
+
+.Producer Code
+----
+while (ProducerNextWritePointer + 1 == ConsumerNextReadPointer);
+
+produceDataAndInsertIntoCircularBufferAt(ProducerNextWritePointer);
+ProducerNextWritePointer += sizeof_oneSlot;
+----
+
+.Consumer Code
+----
+while (ProducerNextWritePointer == ConsumerNextReadPointer);
+
+consumeDataFromCircularBufferAt(ConsumerNextReadPointer);
+ConsumerNextReadPointer += sizeof_oneSlot;
+----
+
+==== Without Busy Waiting
+
+We can use counting semaphores to implement the non busy waiting solution for the producer consumer
+problem.
+
+* At start all N slots can be used by the producer, so we can let it wait on producerSema for
+N times. So initial value of producerSema will be N.
+** When all slots are full the sema value will become -1 and the process will go to sleep state.
+** This sema value will never go < -1 as only Producer waits for it. Neither will this become >
+N as Consumer will signal this no more than N times.
+* At start no slots can be used by the consumer, so initial value of consumerSema will be 0.
+** Everytime Producer signals consumerSema this value will increase. It will never become > N as the
+Producer will itself go to sleep beyond making this N.
+** It will never go < -1 as only Consumer waits for it.
+* There is no need to access the pointer of the other process here.
+** No slots need to be wasted, neither is a fullFlag needed as semaphore value keeps track of
+whether the Producer or Consumer can continue.
+
+The code sections will be something like:
+
+.Init Code
+----
+initSemaWithValue(producerSema, N);
+initSemaWithValue(consumerSema, 0);
+----
+
+.Producer Code
+----
+wait(producerSema);
+
+produceDataAndInsertIntoCircularBufferAt(ProducerNextWritePointer);
+ProducerNextWritePointer += sizeof_oneSlot;
+
+signal(consumerSema);
+----
+
+.Consumer Code
+----
+wait(consumerSema);
+
+consumeDataFromCircularBufferAt(ConsumerNextReadPointer);
+ConsumerNextReadPointer += sizeof_oneSlot;
+
+signal(producerSema);
+----
