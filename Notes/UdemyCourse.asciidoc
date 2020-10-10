@@ -78,16 +78,16 @@ A process also has addresses for various things like functions, etc., these are 
 
 === Contiguous Allocation
 
-Contiguous allocation is if the addresses of the process is placed in a contiguous region of RAM
+Contiguous allocation is if the addresses of the process are placed in a contiguous region of RAM
 physical addresses. The RAM can be made to use fixed/variable partitioning. In fixed partitioning,
-before a process is loaded, the RAM is split into some paritions. Processes are placed into one
-suitable partition when being loaded to RAM. A parition can't hold more than 1 process. In variable
-paritioning, the RAM is not split into any partitions beforehand. When process is loaded, it gets
-a new parition which has the required amount of memory that it needs.
-There is an internal fragmentation problem in fixed partitioning, where there could be extra size
+before a process is loaded, the RAM is split into some partitions. Processes are placed into one
+suitable partition when being loaded to RAM. A partition can't hold more than 1 process. In variable
+paritioning, the RAM is not split into any partitions beforehand. When a process is loaded, it gets
+a new partition which has the required amount of memory that it needs.
+There is an internal fragmentation problem in fixed partitioning, where there could be an extra size
 in the partition for a process that it doesn't need, but it got because the partition was created
 beforehand. There is an external fragmentation problem in variable partitioning, where based on
-how processes came and went earlier, there might be enough space available to accomodate a new
+how processes came and went earlier, there might be enough space available to accommodate a new
 process but it is not contiguous and thus the new process can't be allocated in RAM.
 
 Compaction and Paging are used to avoid fragmentation problems. Compaction causes the allocated
